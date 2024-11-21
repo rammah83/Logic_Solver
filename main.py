@@ -9,8 +9,8 @@ with st.sidebar:
 pages = {
     "HOME": [st.Page("./app_pages/home.py", title="Home", icon="🏠")],
     "SYMBOLIC LOGIC SOLVER": [
-        # st.Page("./app_pages/sympy_maths.py", title="Math Tasks", icon="🔢"),
         st.Page("./app_pages/logic_solver.py", title="Propositional Logic", icon="🧠"),
+        st.Page("./app_pages/smart_logic_solver.py", title="Smart Logic", icon="🧠"),
         ],
 }
 
