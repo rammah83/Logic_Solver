@@ -1,7 +1,7 @@
 import streamlit as st
 
-st.set_page_config(page_title="Ai Tools", layout="wide")
-st.header("Tools", divider=True)
+st.set_page_config(page_title="Logic Tools", layout="wide")
+st.header("Logic Solver", divider=True)
 
 with st.sidebar:
     st.logo(image=r"./res/img/mylogo.jpeg")
