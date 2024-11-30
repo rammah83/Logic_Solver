@@ -1,71 +1,96 @@
-from utils.logical_syllogism import symbolize_expression
-from z3 import ForAll, Exists, Implies, Not, And, Or, solve
 
-# from string import ascii_lowercase
-import streamlit as st
+from z3 import *
 
-# st.subheader("Logic :blue[cool] :sunglasses:")
-with st.sidebar:
-    mode_to_use = st.selectbox(
-        "## Select Mode",
-        options=["Solve models", "Check Entailments"],
-        index=0,
+def check_entailment(kb, conclusion):
+    s = Solver()
+    s.add(Not(conclusion))
+    for statement in kb:
+        s.add(statement)
+    return s.check() == unsat
+
+def solve_model(kb):
+    s = Solver()
+    for statement in kb:
+        s.add(statement)
+    if s.check() == sat:
+        return s.model()
+    else:
+        return None
+
+def parse_expression(expr):
+    # This function will parse the logical expressions from string to z3 expressions
+    if '->' in expr:
+        left, right = expr.split('->')
+        return Implies(parse_expression(left.strip()), parse_expression(right.strip()))
+    elif '<-' in expr:
+        left, right = expr.split('<-')
+        return Implies(parse_expression(right.strip()), parse_expression(left.strip()))
+    elif 'and' in expr:
+        parts = expr.split('and')
+        return And(*[parse_expression(part.strip()) for part in parts])
+    elif 'or' in expr:
+        parts = expr.split('or')
+        return Or(*[parse_expression(part.strip()) for part in parts])
+    elif 'not' in expr:
+        return Not(parse_expression(expr.replace('not', '').strip()))
+    elif expr.startswith('forall'):
+        var, inner_expr = expr[6:].split('.', 1)
+        return ForAll([Symbol(var.strip())], parse_expression(inner_expr.strip()))
+    elif expr.startswith('exists'):
+        var, inner_expr = expr[6:].split('.', 1)
+        return Exists([Symbol(var.strip())], parse_expression(inner_expr.strip()))
+    else:
+        # Assume the expression is a predicate
+        return Symbol(expr.strip())
+
+def main():
+    import streamlit as st
+
+    st.subheader("First-Order Predicate Logic")
+    with st.sidebar:
+        mode_to_use = st.selectbox(
+            "## Select Mode",
+            options=["Solve models", "Check Entailments"],
+            index=0,
+        )
+
+    col_kb, col_entails = st.columns([1, 1], gap="small")
+    logical_statement = col_kb.text_area(
+        "*Building Knowledge Base (KB): _Logical Statement_*",
+        help="Use predicates and logical connectives.",
+        height=200,
     )
 
-col_kb, col_entails = st.columns([1, 1], gap="small", vertical_alignment="bottom")
-logical_statement = col_kb.text_area(
-    "*Building Knwoledge Base (KB): _Logical Statement_*",
-    help="use '>>' for 'implies', '&' for 'and', '|' for 'or', '~' for 'not', Exists for 'exists', ForAll for 'All': don't use E, I, O, N, S, Q",
-    height=200,
-    
-)
-statement_entilment = col_entails.text_input(
-    "Conclusion to entile",
-    help="use '>>' for 'implies', '&' for 'and', '|' for 'or', '~' for 'not', Exists for 'exists', ForAll for 'All': don't use E, I, O, N, S, Q",
-    disabled=mode_to_use != "Check Entailments",
-)
+    statement_entailment = col_entails.text_input(
+        "Conclusion to entail",
+        help="Use predicates and logical connectives.",
+        disabled=mode_to_use != "Check Entailments",
+    )
 
-logical_statement = (
-    logical_statement.replace("=>", ">>").replace("<=", "<<").split("\n")
-)
-def convert_to_z3(statements: list[str]) -> list:
-    """Convert statements to Z3"""
-    from z3 import Bool, And, Or, Not, Implies, ForAll, Exists
-    z3_statements = []
-    for statement in statements:
-        statement = statement.replace("=>", ">>").replace("<=", "<<")
-        # Create a dictionary of Boolean variables
-        vars_dict = {var: Bool(var) for var in set(statement) if var.isalpha()}
-        # Replace logical operators
-        statement = statement.replace("&", "And").replace("|", "Or").replace("~", "Not")
-        # Handle quantifiers
-        if "ForAll" in statement:
-            parts = statement.split("ForAll")
-            vars = parts[1].split(",")[0].strip("()")
-            body = parts[1].split(",", 1)[1].strip()
-            statement = f"ForAll([{vars}], {body})"
-        elif "Exists" in statement:
-            parts = statement.split("Exists")
-            vars = parts[1].split(",")[0].strip("()")
-            body = parts[1].split(",", 1)[1].strip()
-            statement = f"Exists([{vars}], {body})"
-        # Evaluate the statement
-        z3_statements.append(eval(statement, vars_dict))
-    return z3_statements
+    if st.button("SOLVE"):
+        kb = []
+        for stmt in logical_statement.split('\n'):
+            if stmt.strip():
+                kb.append(parse_expression(stmt.strip()))
 
-# convert statements to Z3
-z3_statements = convert_to_z3(logical_statement)
-st.write("##### Logical Statement:")
-st.write(z3_statements)
+        if mode_to_use == "Solve models":
+            model = solve_model(kb)
+            if model:
+                st.write("#### Model:")
+                st.write(model)
+            else:
+                st.write("No model found.")
 
-# if st.button("SOLVE"):
-#     # solve model using predicated logic with z3
-#     st.write("##### Solutions:")
-#     if mode_to_use == "Solve models":
-#         solve(z3_statements)
-#     elif mode_to_use == "Check Entailments":
-#         if len(statement_entilment) > 0:
-#             entailment = statement_entilment.replace("=>", ">>").replace("<=", "<<")
-#             print(entailment)
-    
-    
+        elif mode_to_use == "Check Entailments":
+            if statement_entailment:
+                conclusion = parse_expression(statement_entailment.strip())
+                is_entailment = check_entailment(kb, conclusion)
+                if is_entailment:
+                    st.success("Entailment is true")
+                else:
+                    st.warning("Entailment is not true")
+            else:
+                st.warning("Please enter entailment")
+
+
+main()
