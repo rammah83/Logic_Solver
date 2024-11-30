@@ -1,14 +1,10 @@
-from narwhals import col
-import sympy as sp
 from utils.logical_syllogism import symbolize_expression
 from utils.logical_syllogism import PropositionalLogicSyllogism as Pls
-from sympy.logic.boolalg import simplify_logic, to_cnf
-from sympy.logic.inference import satisfiable, valid, PropKB, entails
 
 # from string import ascii_lowercase
 import streamlit as st
 
-# st.subheader("Logic :blue[cool] :sunglasses:")
+st.subheader("Propositional Logic is so :blue[cool] :sunglasses:")
 with st.sidebar:
     mode_to_use = st.selectbox(
         "## Select Mode",
@@ -23,10 +19,12 @@ logical_statement = col_kb.text_area(
     height=200,
     
 )
+
 statement_entilment = col_entails.text_input(
     "Conclusion to entile",
     help="use '>>' for 'implies', '&' for 'and', '|' for 'or', '~' for 'not': don't use E, I, O, N, S, Q",
     disabled=mode_to_use != "Check Entailments",
+
 )
 
 logical_statement = (
