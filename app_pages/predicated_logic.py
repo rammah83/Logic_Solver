@@ -1,96 +1,90 @@
+from sympy import Function, Symbol, pprint, latex, simplify, simplify_logic, sympify
+from sympy.logic import inference
+import streamlit as st
+from utils.logical_syllogism import symbolize_expression
+from utils.logical_syllogism import PropositionalLogicSyllogism as Pls
+from sympy.logic.boolalg import And, Not
 
-from z3 import *
 
-def check_entailment(kb, conclusion):
-    s = Solver()
-    s.add(Not(conclusion))
-    for statement in kb:
-        s.add(statement)
-    return s.check() == unsat
+# Define the Predicate class
+class FOPredicate(Function):
+    def __init__(self, name):
+        self.name = name
 
-def solve_model(kb):
-    s = Solver()
-    for statement in kb:
-        s.add(statement)
-    if s.check() == sat:
-        return s.model()
-    else:
-        return None
+    def __call__(self, *args):
+        args_str = ",".join(map(str, args))
+        return Symbol(f"{self.name}({args_str})")
 
-def parse_expression(expr):
-    # This function will parse the logical expressions from string to z3 expressions
-    if '->' in expr:
-        left, right = expr.split('->')
-        return Implies(parse_expression(left.strip()), parse_expression(right.strip()))
-    elif '<-' in expr:
-        left, right = expr.split('<-')
-        return Implies(parse_expression(right.strip()), parse_expression(left.strip()))
-    elif 'and' in expr:
-        parts = expr.split('and')
-        return And(*[parse_expression(part.strip()) for part in parts])
-    elif 'or' in expr:
-        parts = expr.split('or')
-        return Or(*[parse_expression(part.strip()) for part in parts])
-    elif 'not' in expr:
-        return Not(parse_expression(expr.replace('not', '').strip()))
-    elif expr.startswith('forall'):
-        var, inner_expr = expr[6:].split('.', 1)
-        return ForAll([Symbol(var.strip())], parse_expression(inner_expr.strip()))
-    elif expr.startswith('exists'):
-        var, inner_expr = expr[6:].split('.', 1)
-        return Exists([Symbol(var.strip())], parse_expression(inner_expr.strip()))
-    else:
-        # Assume the expression is a predicate
-        return Symbol(expr.strip())
+    def __repr__(self) -> str:
+        return f"{self.name}"
 
-def main():
-    import streamlit as st
+    def __str__(self) -> str:
+        return f"{self.name}"
 
-    st.subheader("First-Order Predicate Logic")
-    with st.sidebar:
-        mode_to_use = st.selectbox(
-            "## Select Mode",
-            options=["Solve models", "Check Entailments"],
-            index=0,
-        )
 
-    col_kb, col_entails = st.columns([1, 1], gap="small")
-    logical_statement = col_kb.text_area(
-        "*Building Knowledge Base (KB): _Logical Statement_*",
-        help="Use predicates and logical connectives.",
-        height=200,
+def compose_predicate_expr(statement):
+    raw_str = (
+        statement.replace("~", "")
+        .replace(">>", "+")
+        .replace("|", "+")
+        .replace("&", "+")
+    )
+    raw_str = sympify(raw_str)
+    funcs_names = set(f.name for f in raw_str.atoms(Function))
+    vars_names = raw_str.atoms(Symbol)
+
+    for func in funcs_names:
+        exec(f"{func} = FOPredicate('{func}')")
+    for var in vars_names:
+        exec(f"{var} = Symbol('{var}', bool=True)")
+
+    return simplify(eval(statement))
+
+
+st.subheader("Propositional Logic is so :blue[cool] :sunglasses:")
+with st.sidebar:
+    mode_to_use = st.selectbox(
+        "## Select Mode",
+        options=["Solve models", "Check Entailments"],
+        index=0,
     )
 
-    statement_entailment = col_entails.text_input(
-        "Conclusion to entail",
-        help="Use predicates and logical connectives.",
-        disabled=mode_to_use != "Check Entailments",
-    )
+col_kb, col_entails = st.columns([1, 1], gap="small", vertical_alignment="bottom")
+logical_statement = col_kb.text_area(
+    "*Building Knwoledge Base (KB): _Logical Statement_*",
+    help="use '>>' for 'implies', '&' for 'and', '|' for 'or', '~' for 'not': don't use E, I, O, N, S, Q",
+    height=200,
+)
 
-    if st.button("SOLVE"):
-        kb = []
-        for stmt in logical_statement.split('\n'):
-            if stmt.strip():
-                kb.append(parse_expression(stmt.strip()))
+statement_entilment = col_entails.text_input(
+    "Conclusion to entile",
+    help="use '>>' for 'implies', '&' for 'and', '|' for 'or', '~' for 'not': don't use E, I, O, N, S, Q",
+    disabled=mode_to_use != "Check Entailments",
+)
 
-        if mode_to_use == "Solve models":
-            model = solve_model(kb)
-            if model:
-                st.write("#### Model:")
-                st.write(model)
-            else:
-                st.write("No model found.")
+# propositions = [
+#  Ex(g)
+# "Ex(g) => (Op(g) &  Os(g) & Ob(g))
+# (Ob(g) & Op(g) & Os(g)) => ~Ex(Ev)
+# ~Ex(Ev)"
+#                 ]
+# st.write(propositions)
 
-        elif mode_to_use == "Check Entailments":
-            if statement_entailment:
-                conclusion = parse_expression(statement_entailment.strip())
-                is_entailment = check_entailment(kb, conclusion)
-                if is_entailment:
-                    st.success("Entailment is true")
-                else:
-                    st.warning("Entailment is not true")
-            else:
-                st.warning("Please enter entailment")
+logical_statement = (
+    logical_statement.replace("=>", ">>").replace("<=", "<<").split("\n")
+)
 
-
-main()
+# st.info(logical_statement)
+used_atoms = set()
+propositions = []
+for statement in logical_statement:
+    expr_simplified = compose_predicate_expr(statement)
+    used_atoms |= expr_simplified.atoms()
+    propositions.append(expr_simplified)
+st.info(used_atoms)
+if st.button("SOLVE"):
+    st.info(propositions)
+    global_statement = And(*propositions)
+    simplified_statement = simplify_logic(global_statement)
+    st.latex(latex(simplified_statement))
+    st.write(isinstance(simplified_statement, And))
