@@ -30,6 +30,7 @@ statement_entilment = col_entails.text_input(
 logical_statement = (
     logical_statement.replace("=>", ">>").replace("<=", "<<").split("\n")
 )
+
 st.info(logical_statement)
 if st.button("SOLVE"):
     # solve model
@@ -65,6 +66,7 @@ if st.button("SOLVE"):
         col_sentence.write("---")
         col_result.write("---")
         col_result.latex(simplified_statements)
+    # solve entailment
     elif mode_to_use == "Check Entailments":
         st.info("##### Vedict about entailment:")
         all_raw_statments = problem.representation()
