@@ -1,8 +1,7 @@
-from utils.logical_syllogism import symbolize_expression
-from utils.logical_syllogism import PropositionalLogicSyllogism as Pls
-
-# from string import ascii_lowercase
 import streamlit as st
+
+from utils.syllogism.propositional import PropositionalLogicSyllogism as Pls
+from utils.syllogism.propositional import symbolize_expression
 
 st.subheader("Propositional Logic is so :blue[cool] :sunglasses:")
 with st.sidebar:
@@ -43,7 +42,6 @@ if st.button("SOLVE"):
             st.write(solution)
         else:
             st.dataframe(solution)
-
         expender = st.columns([3, 1])[0].expander("## Details")
         col_sentence, col_result, col_validity = expender.columns(
             [3, 2, 1], gap="small", vertical_alignment="top"

@@ -1,47 +1,13 @@
-from sympy import Function, Symbol, pprint, latex, simplify, simplify_logic, sympify
-from sympy.logic import inference
+from sympy import latex, simplify_logic
 import streamlit as st
-from utils.logical_syllogism import symbolize_expression
-from utils.logical_syllogism import PropositionalLogicSyllogism as Pls
-from sympy.logic.boolalg import And, Not
+from utils.syllogism.predicate import compose_predicate_expr
+from utils.syllogism.propositional import symbolize_expression
+from utils.syllogism.propositional import PropositionalLogicSyllogism as Pls
+from sympy.logic.boolalg import And
 
 
-# Define the Predicate class
-class FOPredicate(Function):
-    def __init__(self, name):
-        self.name = name
 
-    def __call__(self, *args):
-        args_str = ",".join(map(str, args))
-        return Symbol(f"{self.name}({args_str})")
-
-    def __repr__(self) -> str:
-        return f"{self.name}"
-
-    def __str__(self) -> str:
-        return f"{self.name}"
-
-
-def compose_predicate_expr(statement):
-    raw_str = (
-        statement.replace("~", "")
-        .replace(">>", "+")
-        .replace("|", "+")
-        .replace("&", "+")
-    )
-    raw_str = sympify(raw_str)
-    funcs_names = set(f.name for f in raw_str.atoms(Function))
-    vars_names = raw_str.atoms(Symbol)
-
-    for func in funcs_names:
-        exec(f"{func} = FOPredicate('{func}')")
-    for var in vars_names:
-        exec(f"{var} = Symbol('{var}', bool=True)")
-
-    return simplify(eval(statement))
-
-
-st.subheader("Propositional Logic is so :blue[cool] :sunglasses:")
+st.subheader("Predicate Logic is so :blue[cool] :sunglasses:")
 with st.sidebar:
     mode_to_use = st.selectbox(
         "## Select Mode",
@@ -64,9 +30,9 @@ statement_entilment = col_entails.text_input(
 
 # propositions = [
 #  Ex(g)
-# "Ex(g) => (Op(g) &  Os(g) & Ob(g))
+# Ex(g) => (Op(g) &  Os(g) & Ob(g))
 # (Ob(g) & Op(g) & Os(g)) => ~Ex(Ev)
-# ~Ex(Ev)"
+# ~Ex(Ev)
 #                 ]
 # st.write(propositions)
 
@@ -77,12 +43,15 @@ logical_statement = (
 # st.info(logical_statement)
 used_atoms = set()
 propositions = []
-for statement in logical_statement:
-    expr_simplified = compose_predicate_expr(statement)
-    used_atoms |= expr_simplified.atoms()
-    propositions.append(expr_simplified)
-st.info(used_atoms)
-if st.button("SOLVE"):
+
+# st.info(used_atoms)
+if st.button("SOLVE") and len(logical_statement) > 1:
+    for statement in logical_statement:
+        if statement == "":
+            continue
+        expr_simplified = compose_predicate_expr(statement)
+        used_atoms |= expr_simplified.atoms()
+        propositions.append(expr_simplified)
     st.info(propositions)
     global_statement = And(*propositions)
     simplified_statement = simplify_logic(global_statement)
