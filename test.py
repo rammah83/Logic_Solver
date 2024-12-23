@@ -1,87 +1,14 @@
-"""
-A new module for first-order logic within sympy.logic.
+from sympy import Symbol, Function, And, Or, Not, Implies
+from sympy.core.expr import Expr
 
-This module introduces classes and functions to represent and manipulate 
-first-order logic (FOL) constructs, including predicates, quantifiers, 
-and functions. It is a starting point and may be extended for unification, 
-theorem proving, and model checking.
-"""
-
-from sympy.core.symbol import Symbol
-from sympy import sympify
-from sympy.logic.boolalg import BooleanFunction
-
-class Term:
-    """Abstract base class for FOL terms (variables, constants, functions)."""
-    def __new__(cls, *args, **kwargs):
-        if cls is Term:
-            raise TypeError("Term is an abstract class.")
-        return object.__new__(cls)
-
-class Variable(Term):
-    """A variable in first-order logic."""
-    __slots__ = ['name']
-    def __init__(self, name):
-        self.name = str(name)
-    def __repr__(self):
-        return self.name
-    def __eq__(self, other):
-        return isinstance(other, Variable) and self.name == other.name
-    def free_variables(self):
-        return {self}
-
-class Constant(Term):
-    """A constant symbol."""
-    __slots__ = ['name']
-    def __init__(self, name):
-        self.name = str(name)
-    def __repr__(self):
-        return self.name
-    def __eq__(self, other):
-        return isinstance(other, Constant) and self.name == other.name
-    def free_variables(self):
-        return set()
-
-class Function(Term):
-    """A function symbol with given arity."""
-    __slots__ = ['name', 'args']
-    def __init__(self, name, *args):
-        self.name = str(name)
-        self.args = args
-    def __repr__(self):
-        return f"{self.name}({', '.join(map(repr, self.args))})"
-    def __eq__(self, other):
-        return (isinstance(other, Function) and
-                self.name == other.name and self.args == other.args)
-    def free_variables(self):
-        fvars = set()
-        for arg in self.args:
-            fvars |= arg.free_variables()
-        return fvars
-
-class Predicate(BooleanFunction):
-    """A predicate symbol, extending BooleanFunction for logical predicates."""
-    def __new__(cls, name, *args):
-        # Ensure args are sympifiable
-        sympy_args = [arg if isinstance(arg, Variable) else sympify(arg) for arg in args]
-        obj = BooleanFunction.__new__(cls, *sympy_args)
-        obj.name = str(name)
+class ForAll(Expr):
+    def __new__(cls, variable, formula):
+        if not isinstance(variable, Symbol):
+            raise TypeError("Variable must be a sympy.Symbol")
+        if not isinstance(formula, Expr):
+            raise TypeError("Formula must be a sympy expression")
+        obj = super().__new__(cls, variable, formula)
         return obj
-    def __repr__(self):
-        return f"{self.name}({', '.join(map(repr, self.args))})"
-    def free_variables(self):
-        fvars = set()
-        for arg in self.args:
-            if hasattr(arg, 'free_variables'):
-                fvars |= arg.free_variables()
-        return fvars
-
-class Quantifier(BooleanFunction):
-    """Abstract base class for quantifiers."""
-    def __new__(cls, var, formula):
-        if cls is Quantifier:
-            raise TypeError("Quantifier is an abstract class.")
-        return BooleanFunction.__new__(cls, var, formula)
 
     @property
     def variable(self):
@@ -91,98 +18,143 @@ class Quantifier(BooleanFunction):
     def formula(self):
         return self.args[1]
 
-    def free_variables(self):
-        return self.formula.free_variables() - {self.variable}
+    def _sympystr(self, printer):
+        return f"ForAll({printer._print(self.variable)}, {printer._print(self.formula)})"
 
-class ForAll(Quantifier):
-    """Universal quantification: ∀x φ."""
-    def __repr__(self):
-        return f"ForAll({self.variable}, {self.formula})"
+class Exists(Expr):
+    def __new__(cls, variable, formula):
+        if not isinstance(variable, Symbol):
+            raise TypeError("Variable must be a sympy.Symbol")
+        if not isinstance(formula, Expr):
+            raise TypeError("Formula must be a sympy expression")
+        obj = super().__new__(cls, variable, formula)
+        return obj
 
-class Exists(Quantifier):
-    """Existential quantification: ∃x φ."""
-    def __repr__(self):
-        return f"Exists({self.variable}, {self.formula})"
+    @property
+    def variable(self):
+        return self.args[0]
 
-def substitute(expr, var, term):
-    """Substitute occurrences of var in expr with term."""
-    if isinstance(expr, Variable):
-        return term if expr == var else expr
-    elif isinstance(expr, Constant):
-        return expr
-    elif isinstance(expr, Function):
-        return Function(expr.name, *[substitute(arg, var, term) for arg in expr.args])
-    elif isinstance(expr, Predicate):
-        return Predicate(expr.name, *[substitute(arg, var, term) for arg in expr.args])
-    elif isinstance(expr, Quantifier):
-        # Avoid variable capture
-        if expr.variable == var:
-            # The bound variable shadows var, no substitution inside
-            return expr
+    @property
+    def formula(self):
+        return self.args[1]
+
+    def _sympystr(self, printer):
+        return f"Exists({printer._print(self.variable)}, {printer._print(self.formula)})"
+
+def string_to_fol(statement):
+    """
+    Converts a string representation of a First-Order Logic statement
+    to a sympy-compatible symbolic expression.
+
+    Supported elements:
+    - Variables: e.g., 'x', 'y'
+    - Predicates: e.g., 'p(x)', 'Q1(x, y)' (case-sensitive function names)
+    - Logical connectives: '=>' (implies), '&' (and), '|' (or), '~' (not)
+    - Quantifiers: 'ForAll(variable, formula)', 'Exists(variable, formula)'
+
+    Example:
+    string_to_fol("ForAll(x, p(x) => Q1(x))")
+    """
+    # 1. Basic String Cleaning and Preparation
+    statement = statement.strip()
+
+    # 2. Helper Function to Parse Predicates
+    def parse_predicate(predicate_str):
+        if '(' in predicate_str and predicate_str.endswith(')'):
+            name = predicate_str[:predicate_str.index('(')]
+            args_str = predicate_str[predicate_str.index('(') + 1:-1]
+            args = [Symbol(arg.strip()) for arg in args_str.split(',') if arg.strip()]
+            return Function(name)(*args)
         else:
-            return type(expr)(expr.variable, substitute(expr.formula, var, term))
-    else:
-        return expr
+            raise ValueError(f"Invalid predicate format: {predicate_str}")
 
-# Additional functionalities (e.g., Skolemization, Prenex normal form, 
-# Unification) can be added here as needed.
+    # 3. Recursive Parsing Function
+    def parse_formula(formula_str):
+        formula_str = formula_str.strip()
 
-if __name__ == "__main__":
-    # Example tests and usage of the first-order logic module.
+        # Handle Quantifiers
+        if formula_str.startswith("ForAll("):
+            content = formula_str[7:-1].strip()
+            if ',' not in content:
+                raise ValueError(f"Invalid ForAll syntax: {formula_str}")
+            var_str, rest_formula_str = content.split(',', 1)
+            variable = Symbol(var_str.strip())
+            sub_formula = parse_formula(rest_formula_str)
+            return ForAll(variable, sub_formula)
+        elif formula_str.startswith("Exists("):
+            content = formula_str[7:-1].strip()
+            if ',' not in content:
+                raise ValueError(f"Invalid Exists syntax: {formula_str}")
+            var_str, rest_formula_str = content.split(',', 1)
+            variable = Symbol(var_str.strip())
+            sub_formula = parse_formula(rest_formula_str)
+            return Exists(variable, sub_formula)
 
-    # Create some variables
-    x = Variable('x')
-    y = Variable('y')
-    z = Variable('z')
+        # Handle Negation
+        elif formula_str.startswith("~"):
+            sub_formula = parse_formula(formula_str[1:].strip())
+            return Not(sub_formula)
 
-    # Create some constants
-    a = Constant('a')
-    b = Constant('b')
+        # Handle Implications
+        elif "=>" in formula_str:
+            parts = [p.strip() for p in formula_str.split("=>", 1)]
+            if len(parts) != 2:
+                raise ValueError(f"Invalid implication syntax: {formula_str}")
+            left = parse_formula(parts[0])
+            right = parse_formula(parts[1])
+            return Implies(left, right)
 
-    # Create function symbols
-    f = Function('f', x, a)
-    g = Function('g', y, b)
+        # Handle And
+        elif "&" in formula_str:
+            parts = [parse_formula(p.strip()) for p in formula_str.split("&")]
+            return And(*parts)
 
-    # Create predicates
-    P = Predicate('P', x, f)
-    Qe = Predicate('Qe', y, g)
+        # Handle Or
+        elif "|" in formula_str:
+            parts = [parse_formula(p.strip()) for p in formula_str.split("|")]
+            return Or(*parts)
 
-    # Test representation
-    print("Variables and constants:")
-    print("x:", x)
-    print("a:", a)
-    print("f(x,a):", f)
+        # Handle Parentheses (for order of operations)
+        elif formula_str.startswith("(") and formula_str.endswith(")"):
+            return parse_formula(formula_str[1:-1])
 
-    print("\nPredicates:")
-    print("P(x,f(x,a)):", P)
-    print("Qe(y,g(y,b)):", Qe)
+        # Handle Predicates (or single symbols)
+        elif '(' in formula_str:
+            return parse_predicate(formula_str)
+        else:
+            return Symbol(formula_str)  # Could be a single variable
 
-    # Create quantified formulas
-    phi = ForAll(x, P)       # ∀x P(x,f(x,a))
-    psi = Exists(y, Qe)       # ∃y Q(y,g(y,b))
+    return parse_formula(statement)
 
-    print("\nQuantified Formulas:")
-    print("ForAll(x, P(x,f(x,a))):", phi)
-    print("Exists(y, Qe(y,g(y,b))):", psi)
+# Example Usage
+statement = "ForAll(x, p(x) => Q1(x))"
+sympified_statement = string_to_fol(statement)
+print(f"Original statement: {statement}")
+print(f"Sympified statement: {sympified_statement}")
 
-    # Free variables tests
-    print("\nFree variables:")
-    print("Free vars in P:", P.free_variables())
-    print("Free vars in Q:", Qe.free_variables())
-    print("Free vars in ForAll(x, P(x,f(x,a))):", phi.free_variables())
-    print("Free vars in Exists(y, Qe(y,g(y,b))):", psi.free_variables())
+statement2 = "Exists(y, R(y) & ~S(y))"
+sympified_statement2 = string_to_fol(statement2)
+print(f"Original statement: {statement2}")
+print(f"Sympified statement: {sympified_statement2}")
 
-    # Substitution example
-    print("\nSubstitution:")
-    # Substitute x with a constant b in P(x,f(x,a))
-    P_sub = substitute(P, x, b)
-    print("Substitute x with b in P(x,f(x,a)):", P_sub)
+statement3 = "(A | B) => C"
+sympified_statement3 = string_to_fol(statement3)
+print(f"Original statement: {statement3}")
+print(f"Sympified statement: {sympified_statement3}")
 
-    # Substitution inside a quantifier
-    phi_sub = substitute(phi, x, b)  # Since x is bound in phi, no change expected
-    print("Substitute x with b in ForAll(x, P(x,f(x,a))):", phi_sub)
+statement4 = "P(a, b) & Q1(c)"
+sympified_statement4 = string_to_fol(statement4)
+print(f"Original statement: {statement4}")
+print(f"Sympified statement: {sympified_statement4}")
 
-    # Another substitution
-    phi_new = ForAll(y, P)   # ∀y P(x,f(x,a)) – here x is free, y is bound
-    phi_new_sub = substitute(phi_new, x, a)
-    print("Substitute x with a in ForAll(y, P(x,f(x,a))):", phi_new_sub)
+# Example of nested quantifiers
+statement5 = "ForAll(x, Exists(y, P(x, y)))"
+sympified_statement5 = string_to_fol(statement5)
+print(f"Original statement: {statement5}")
+print(f"Sympified statement: {sympified_statement5}")
+
+# Example with mixed connectives and quantifiers
+statement6 = "ForAll(x, p(x) => Exists(y, Q1(x, y) & R(y)))"
+sympified_statement6 = string_to_fol(statement6)
+print(f"Original statement: {statement6}")
+print(f"Sympified statement: {sympified_statement6}")

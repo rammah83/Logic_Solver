@@ -2,7 +2,7 @@
 This module defines the FOPredicate class and a function to compose predicate expressions.
 """
 
-from sympy import Function, Symbol, simplify, sympify
+from sympy import Function, Symbol, simplify, symbols, sympify, pprint
 
 
 # Define the Predicate class
@@ -19,6 +19,7 @@ class FOPredicate(Function):
 
     def __str__(self) -> str:
         return f"{self.name}"
+
 
 
 def compose_predicate_expr(statement):
@@ -38,3 +39,8 @@ def compose_predicate_expr(statement):
         exec(f"{var} = Symbol('{var}', bool=True)")
 
     return simplify(eval(statement))
+
+if __name__ == "__main__":
+    STATEMENT = "P(x) & Qi(x) >> R(x)"
+    pprint(compose_predicate_expr(STATEMENT))
+    
