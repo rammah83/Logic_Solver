@@ -2,7 +2,7 @@
 This module defines the FOPredicate class and a function to compose predicate expressions.
 """
 
-from sympy import Function, Symbol, simplify, symbols, sympify, pprint
+from sympy import Function, Symbol, satisfiable, simplify, symbols, sympify, pprint
 
 
 # Define the Predicate class
@@ -42,5 +42,7 @@ def compose_predicate_expr(statement):
 
 if __name__ == "__main__":
     STATEMENT = "P(x) & Qi(x) >> R(x)"
-    pprint(compose_predicate_expr(STATEMENT))
+    sympified_statment = compose_predicate_expr(STATEMENT)
+    for world in satisfiable(sympified_statment, all_models=True):
+        pprint(world)
     
